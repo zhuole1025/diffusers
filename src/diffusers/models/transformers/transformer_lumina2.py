@@ -116,8 +116,11 @@ class Lumina2TransformerBlock(nn.Module):
             encoder_mask (`torch.Tensor`): The hidden_states of text prompt attention mask.
             temb (`torch.Tensor`): Timestep embedding with text prompt embedding.
         """
+        if self.modulation:
+            norm_hidden_states, gate_msa, scale_mlp, gate_mlp = self.norm1(hidden_states, temb)
+        else:
+            norm_hidden_states = self.norm1(hidden_states)
 
-        norm_hidden_states, gate_msa, scale_mlp, gate_mlp = self.norm1(hidden_states, temb)
         attn_output = self.attn(
             hidden_states=norm_hidden_states,
             encoder_hidden_states=norm_hidden_states,
@@ -247,7 +250,7 @@ class Lumina2Transformer2DModel(ModelMixin, ConfigMixin):
                     multiple_of,
                     ffn_dim_multiplier,
                     norm_eps,
-                    modulation=True,
+                    modulation=False,
                 )
                 for _ in range(num_refiner_layers)
             ]
@@ -347,7 +350,7 @@ class Lumina2Transformer2DModel(ModelMixin, ConfigMixin):
             
         padded_img_embed = self.x_embedder(padded_img_embed)
     
-        return cap_feats, padded_img_embed, img_sizes, l_effective_cap_len, l_effective_img_len, freqs_cis, max_seq_len, cap_mask, padded_img_mask, cap_freqs_cis
+        return cap_feats, padded_img_embed, img_sizes, l_effective_cap_len, l_effective_img_len, freqs_cis, max_seq_len, cap_mask, padded_img_mask, cap_freqs_cis, img_freqs_cis
 
     def prepare_joint_input(
         self,
@@ -360,7 +363,7 @@ class Lumina2Transformer2DModel(ModelMixin, ConfigMixin):
         bsz = cap_feats.size(0)
         device = cap_feats.device
         mask = torch.zeros(bsz, max_seq_len, dtype=torch.bool, device=device)
-        padded_full_embed = torch.zeros(bsz, max_seq_len, self.hidden_size, device=device, dtype=x[0].dtype)
+        padded_full_embed = torch.zeros(bsz, max_seq_len, self.hidden_size, device=device, dtype=cap_feats.dtype)
         for i in range(bsz):
             cap_len = l_effective_cap_len[i]
             img_len = l_effective_img_len[i]
@@ -389,14 +392,15 @@ class Lumina2Transformer2DModel(ModelMixin, ConfigMixin):
         """
         
         temb, encoder_hidden_states = self.time_caption_embed(timestep, encoder_hidden_states)
-        cap_feats, padded_img_embed, img_size, l_effective_cap_len, l_effective_img_len, image_rotary_emb, max_seq_len, cap_mask, padded_img_mask, cap_freqs_cis = self.patchify_and_embed(hidden_states, encoder_hidden_states, encoder_mask, temb)
+        cap_feats, padded_img_embed, img_size, l_effective_cap_len, l_effective_img_len, image_rotary_emb, max_seq_len, cap_mask, padded_img_mask, cap_freqs_cis, img_freqs_cis = self.patchify_and_embed(hidden_states, encoder_hidden_states, encoder_mask, temb)
+
         image_rotary_emb = image_rotary_emb.to(hidden_states.device)
-        
+
         for layer in self.context_refiner:
             cap_feats = layer(cap_feats, cap_mask, cap_freqs_cis)
             
         for layer in self.noise_refiner:
-            padded_img_embed = layer(padded_img_embed, padded_img_mask, img_freqs_cis, t)
+            padded_img_embed = layer(padded_img_embed, padded_img_mask, img_freqs_cis, temb)
         
         hidden_states, mask = self.prepare_joint_input(cap_feats, padded_img_embed, max_seq_len, l_effective_cap_len, l_effective_img_len)
 
@@ -415,7 +419,7 @@ class Lumina2Transformer2DModel(ModelMixin, ConfigMixin):
         output = []
         for i in range(len(img_size)):
             height, width = img_size[i]
-            begin = cap_size[i]
+            begin = l_effective_cap_len[i]
             end = begin + (height // height_tokens) * (width // width_tokens)
             output.append(
                 hidden_states[i][begin:end]
