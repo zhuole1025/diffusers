@@ -791,8 +791,6 @@ class Lumina2Text2ImgPipeline(DiffusionPipeline):
                         # some platforms (eg. apple mps) misbehave due to a pytorch bug: https://github.com/pytorch/pytorch/pull/99272
                         latents = latents.to(latents_dtype)
 
-                progress_bar.update()
-
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
                     for k in callback_on_step_end_tensor_inputs:
