@@ -247,7 +247,7 @@ class Lumina2Transformer2DModel(ModelMixin, ConfigMixin):
                     multiple_of,
                     ffn_dim_multiplier,
                     norm_eps,
-                    modulation=False,
+                    modulation=True,
                 )
                 for _ in range(num_refiner_layers)
             ]
