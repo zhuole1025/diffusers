@@ -347,7 +347,7 @@ class Lumina2Transformer2DModel(ModelMixin, ConfigMixin):
             
         padded_img_embed = self.x_embedder(padded_img_embed)
     
-        return cap_feats, padded_img_embed, img_sizes, l_effective_cap_len, l_effective_img_len, freqs_cis, max_seq_len, cap_mask, padded_img_mask
+        return cap_feats, padded_img_embed, img_sizes, l_effective_cap_len, l_effective_img_len, freqs_cis, max_seq_len, cap_mask, padded_img_mask, cap_freqs_cis
 
     def prepare_joint_input(
         self,
@@ -389,7 +389,7 @@ class Lumina2Transformer2DModel(ModelMixin, ConfigMixin):
         """
         
         temb, encoder_hidden_states = self.time_caption_embed(timestep, encoder_hidden_states)
-        cap_feats, padded_img_embed, img_size, l_effective_cap_len, l_effective_img_len, image_rotary_emb, max_seq_len, cap_mask, padded_img_mask = self.patchify_and_embed(hidden_states, encoder_hidden_states, encoder_mask, temb)
+        cap_feats, padded_img_embed, img_size, l_effective_cap_len, l_effective_img_len, image_rotary_emb, max_seq_len, cap_mask, padded_img_mask, cap_freqs_cis = self.patchify_and_embed(hidden_states, encoder_hidden_states, encoder_mask, temb)
         image_rotary_emb = image_rotary_emb.to(hidden_states.device)
         
         for layer in self.context_refiner:
